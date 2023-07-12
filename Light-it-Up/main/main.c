@@ -30,25 +30,15 @@ static const char *TAG = "example";
  * Initializes touch sensor  
  */
 void configure_touch_sensor() {
-        /*
-     * Before using a touch pad, you need to initialize the touch pad driver by 
-     * calling the function touch_pad_init(). This function sets several .._DEFAULT
-     * driver parameters listed in API Reference under Macros. It also removes the
-     * information about which pads have been touched before, if any,
-     * and disables interrupts.
-     */
+    /* Before using a touch pad, you need to initialize the touch pad driver */
     ESP_ERROR_CHECK(touch_pad_init());
 
-    /*
-     * Use the function touch_pad_set_fsm_mode() to select if touch pad
-     * measurement (operated by FSM) should be started automatically by a hardware timer
-     */
+    /* Use the function touch_pad_set_fsm_mode() to select if touch pad
+     * measurement (operated by FSM) should be started automatically by a hardware timer */
     ESP_ERROR_CHECK(touch_pad_set_fsm_mode(TOUCH_FSM_MODE_SW));
     
-    /*
-     * Enabling the touch sensor functionality for a particular GPIO is done
-     * with touch_pad_config()
-     */
+    /* Enabling the touch sensor functionality for a particular GPIO is done
+     * with touch_pad_config() */
     ESP_ERROR_CHECK(touch_pad_config(TOUCH_SENSOR_GPIO, 200));
     
     /* Start touch sensor by software */
@@ -71,17 +61,16 @@ void configure_touch_sensor() {
 void configure_LED() {
     /* Configure LEDC timer */
     ledc_timer_config_t ledc_timer = {
-    /* Resolution of the pwm duty (the amount of shades LED can reach) */
-    .duty_resolution = LEDC_DUTY_RESOLUTION,
-    /* Sets the frequency of the PWM signal to 200Hz */
-    .freq_hz = LEDC_FREQUENCY,
-    /* Sets the speed mode of the timer. This is not a correct value
-     * and should be either LEDC_HIGH_SPEED_MODE or LEDC_LOW_SPEED_MODE */
-    .speed_mode = LEDC_MODE,
-    /* Assigns the LEDC timer number 0 to this configuration */
-    .timer_num = LEDC_TIMER,
-    /* Configure source clock */
-    .clk_cfg = LEDC_AUTO_CLK
+        /* Resolution of the pwm duty (the amount of shades LED can reach) */
+        .duty_resolution = LEDC_DUTY_RESOLUTION,
+        /* Sets the frequency of the PWM signal to (LEDC_FREQUENCY) Hz, so LED can switch between (LEDC_FREQUENCY) brightness levels per second */
+        .freq_hz = LEDC_FREQUENCY,
+        /* Sets the speed mode of the timer */
+        .speed_mode = LEDC_MODE,
+        /* Assigns the LEDC timer number 0 to this configuration */
+        .timer_num = LEDC_TIMER,
+        /* Configure source clock */
+        .clk_cfg = LEDC_AUTO_CLK
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
@@ -100,6 +89,7 @@ void configure_LED() {
     };
     ESP_ERROR_CHECK(ledc_channel_config(&led_config));
 
+    /* Activate the fading functionality */
     ESP_ERROR_CHECK(ledc_fade_func_install(0));    
 }
 
@@ -115,8 +105,11 @@ void fade_LED() {
     ESP_ERROR_CHECK(ledc_fade_start(LEDC_MODE, LEDC_CHANNEL, LEDC_FADE_NO_WAIT));
 }
 
-
+/**
+ * Function for lighting the LED
+ */
 void light_LED() {
+    /* Set the target duty cycle and the time it takes to reach that duty cycle */
     ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, 0, FADE_TIME));
     
     /* Start fading */
