@@ -1,32 +1,26 @@
-# _Sample project_
+# Light-it-Up
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+Compiling and flashing this project via ESP-IDF toolchain onto ESP32 board will allow you to control the LED with nothing else but touch.
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+## How to use
+
+First, you need to set up your hardware. You'll need an ESP32 chip, LED and a wire.
+
+Connect the LED's positive terminal to the GPIO 23 and it's negative terminal to the GND pin.
+
+Attach the wire to the GPIO 4.
+
+To build and flash, the simplest way is use the VS Code extension provided by Espressif, make sure to install it first.
 
 
+1) Connect to your chip via usb cable (make sure it's not charging cable only)
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
+2) Open the VS Code command panel (ctrl + shift + P) and type "ESP-IDF: ", you'll then see various commands provided by the ESP-IDF framework
 
-## Example folder contents
+3) From the listed commands, select "Select port to use" and pick the port to which the device is connected
 
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
+4) Then search for the "Build, Flash and start monitor on your device" command and run it. Choose UART flashing method when the selection pops up.
 
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
+5) When the previous command finishes, you should see a logger window in your VS Code IDE, wait till you see a line looking like this: "I (X) main_task: Calling app_main()"
 
-Below is short explanation of remaining files in the project folder.
-
-```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+6) Touch a conductive part of the wire and see what happens!
