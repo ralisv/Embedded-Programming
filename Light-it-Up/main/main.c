@@ -1,5 +1,7 @@
 #include <unistd.h>
 #include <stdio.h>
+#include <math.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -15,6 +17,7 @@ static const char *TAG = "app_main";
 
 
 #define TOUCH_SENSOR_GPIO TOUCH_PAD_NUM0
+#define TOUCH_DETECTION_THRESHOLD 500
 
 #define LEDC_TIMER LEDC_TIMER_0
 #define LEDC_MODE LEDC_LOW_SPEED_MODE
@@ -23,7 +26,7 @@ static const char *TAG = "app_main";
 #define LEDC_DUTY_RESOLUTION LEDC_TIMER_10_BIT
 #define LEDC_DUTY 512
 #define LEDC_FREQUENCY 100
-#define LEDC_MAX_DUTY 1023
+#define LEDC_MAX_DUTY (pow(2, LEDC_DUTY_RESOLUTION) - 1)
 
 #define FADE_TIME 1000 // ms
 
@@ -121,14 +124,18 @@ void light_LED() {
 /**
  * Function which makes an educated guess of whether the touch sensor is being touched or not
  */
-bool is_touching(uint16_t touch_value) {
-    return touch_value > 500;
+bool inline is_touching(uint16_t touch_value) {
+    return touch_value > TOUCH_DETECTION_THRESHOLD;
 }
 
 
-void app_main(void) {    
+void app_main(void) {
+    ESP_LOGI(TAG, "Configuring touch sensor at pin %u", TOUCH_SENSOR_GPIO);
     configure_touch_sensor();
 
+    ESP_LOGI(TAG, "Touch detection threshold is set to arbitrary value of %u", TOUCH_DETECTION_THRESHOLD);
+
+    ESP_LOGI(TAG, "Configuring LED at pin %u", LEDC_GPIO);
     configure_LED();
  
     bool was_touching = false;
@@ -136,11 +143,13 @@ void app_main(void) {
     while (1) {
         uint16_t touch_value;
         touch_pad_read(TOUCH_PAD_NUM0, &touch_value);
-
+        ESP_LOGI(TAG, "Reading arbitrary value of %u from the touch sensor", touch_value);
         if (was_touching && !is_touching(touch_value)) {
+            ESP_LOGI(TAG, "Turning LED off since touch sensor is no longer touched");
             fade_LED();
             was_touching = false;
         } else if (!was_touching && is_touching(touch_value)) {
+            ESP_LOGI(TAG, "Turning LED on since touch is detected");
             light_LED();
             was_touching = true;
         }
