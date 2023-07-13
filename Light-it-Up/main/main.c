@@ -17,18 +17,30 @@ static const char *TAG = "app_main";
 
 
 #define TOUCH_SENSOR_GPIO TOUCH_PAD_NUM0
+/* Arbitrary value, in your setup you migjt have to modify it */
 #define TOUCH_DETECTION_THRESHOLD 500
+/* The higher the touch resolution, the smoother the light-up and fade is going to be */
+#define TOUCH_RESOLUTION 20
+
 
 #define LEDC_TIMER LEDC_TIMER_0
 #define LEDC_MODE LEDC_LOW_SPEED_MODE
 #define LEDC_GPIO 23
 #define LEDC_CHANNEL LEDC_CHANNEL_0
-#define LEDC_DUTY_RESOLUTION LEDC_TIMER_10_BIT
-#define LEDC_DUTY 512
+#define LEDC_DUTY_RESOLUTION LEDC_TIMER_13_BIT
+#define LEDC_DUTY 0
 #define LEDC_FREQUENCY 100
 #define LEDC_MAX_DUTY (pow(2, LEDC_DUTY_RESOLUTION) - 1)
 
-#define FADE_TIME 1000 // ms
+#define LEDC_DUTY_INCREMENT (LEDC_MAX_DUTY / TOUCH_RESOLUTION)
+
+#define TOTAL_FADE_TIME 5000 // ms
+#define FADE_TIME (TOTAL_FADE_TIME / TOUCH_RESOLUTION)
+
+
+#define min(x, y) (x < y : x ? y)
+#define max(x, y) (x < y : y ? x)
+
 
 /**
  * Initializes touch sensor  
@@ -100,29 +112,42 @@ void configure_LED() {
 
 /**
  * Function for fading LED
+ * @param current_duty The current state of duty
+ * @returns new satte of duty
  */
-void fade_LED() {
+uint16_t fade_LED(uint16_t current_duty) {
+    const uint16_t new_duty = (LEDC_DUTY_INCREMENT > current_duty) ? 0 : current_duty - LEDC_DUTY_INCREMENT; // Check for underflow
+
     /* Set the target duty cycle and the time it takes to reach that duty cycle */
-    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, 0, FADE_TIME));
+    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, new_duty, FADE_TIME));
     
     /* Start fading */
     ESP_ERROR_CHECK(ledc_fade_start(LEDC_MODE, LEDC_CHANNEL, LEDC_FADE_NO_WAIT));
+
+    return new_duty;
 }
 
 /**
  * Function for lighting the LED
+ * @param current_duty The current state of duty
+ * @returns new satte of duty
  */
-void light_LED() {
+uint16_t light_LED(uint16_t current_duty) {
+    const uint16_t new_duty = (LEDC_DUTY_INCREMENT + current_duty > LEDC_MAX_DUTY) ? LEDC_MAX_DUTY : current_duty + LEDC_DUTY_INCREMENT; // Check for overflow
+
     /* Set the target duty cycle and the time it takes to reach that duty cycle */
-    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, LEDC_MAX_DUTY, FADE_TIME));
+    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, new_duty, FADE_TIME));
     
     /* Start fading */
     ESP_ERROR_CHECK(ledc_fade_start(LEDC_MODE, LEDC_CHANNEL, LEDC_FADE_NO_WAIT));
+
+    return new_duty;
 }
 
 
 /**
  * Function which makes an educated guess of whether the touch sensor is being touched or not
+//  * @returns true if the touch sensor guesses the sensor is being touched, false otherwise
  */
 bool inline is_touching(uint16_t touch_value) {
     return touch_value < TOUCH_DETECTION_THRESHOLD;
@@ -139,22 +164,31 @@ void app_main(void) {
     configure_LED();
  
     bool was_touching = false;
+    uint16_t duty = 0;
+    uint16_t previous_duty = -1;
 
-    ESP_LOGI(TAG, "Fading LED initially");
-    fade_LED();
-
+    uint16_t touch_value;
     while (1) {
-        uint16_t touch_value;
+        if (duty != previous_duty) {
+            ESP_LOGI(TAG, "Current duty is %u", duty);
+            previous_duty = duty;
+        }
+        
         touch_pad_read(TOUCH_PAD_NUM0, &touch_value);
         ESP_LOGI(TAG, "Reading arbitrary value of %u from the touch sensor", touch_value);
-        if (was_touching && !is_touching(touch_value)) {
-            ESP_LOGI(TAG, "Turning LED off since touch sensor is no longer touched");
-            fade_LED();
-            was_touching = false;
-        } else if (!was_touching && is_touching(touch_value)) {
-            ESP_LOGI(TAG, "Turning LED on since touch is detected");
-            light_LED();
-            was_touching = true;
+        
+        if (!is_touching(touch_value) && duty > 0) {
+            if (was_touching) {
+                ESP_LOGI(TAG, "Fading LED since touch sensor is no longer touched");
+                was_touching = false;
+            }
+            duty = fade_LED(duty);        
+        } else if (is_touching(touch_value) && duty < LEDC_MAX_DUTY) {
+            if (!was_touching) {
+                ESP_LOGI(TAG, "Lighting LED up since touch is detected");
+                was_touching = true;
+            }
+            duty = light_LED(duty);
         }
 
         /* Wait for the fade to complete */
