@@ -103,7 +103,7 @@ void configure_LED() {
  */
 void fade_LED() {
     /* Set the target duty cycle and the time it takes to reach that duty cycle */
-    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, LEDC_MAX_DUTY, FADE_TIME));
+    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, 0, FADE_TIME));
     
     /* Start fading */
     ESP_ERROR_CHECK(ledc_fade_start(LEDC_MODE, LEDC_CHANNEL, LEDC_FADE_NO_WAIT));
@@ -114,7 +114,7 @@ void fade_LED() {
  */
 void light_LED() {
     /* Set the target duty cycle and the time it takes to reach that duty cycle */
-    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, 0, FADE_TIME));
+    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, LEDC_MAX_DUTY, FADE_TIME));
     
     /* Start fading */
     ESP_ERROR_CHECK(ledc_fade_start(LEDC_MODE, LEDC_CHANNEL, LEDC_FADE_NO_WAIT));
@@ -125,7 +125,7 @@ void light_LED() {
  * Function which makes an educated guess of whether the touch sensor is being touched or not
  */
 bool inline is_touching(uint16_t touch_value) {
-    return touch_value > TOUCH_DETECTION_THRESHOLD;
+    return touch_value < TOUCH_DETECTION_THRESHOLD;
 }
 
 
@@ -139,6 +139,9 @@ void app_main(void) {
     configure_LED();
  
     bool was_touching = false;
+
+    ESP_LOGI(TAG, "Fading LED initially");
+    fade_LED();
 
     while (1) {
         uint16_t touch_value;
