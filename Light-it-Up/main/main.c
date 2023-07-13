@@ -10,7 +10,8 @@
 #include "driver/ledc.h"
 
 
-static const char *TAG = "example";
+/* Tag used for logging in the main function */
+static const char *TAG = "app_main";
 
 
 #define TOUCH_SENSOR_GPIO TOUCH_PAD_NUM0
