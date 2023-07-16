@@ -12,15 +12,11 @@
 #include "driver/ledc.h"
 
 
-/* Tag used for logging in the main function */
-static const char *TAG = "app_main";
-
-
 #define TOUCH_SENSOR_GPIO TOUCH_PAD_NUM0
 /* Arbitrary value, in your setup you migjt have to modify it */
 #define TOUCH_DETECTION_THRESHOLD 500
 /* The higher the touch resolution, the smoother the light-up and fade is going to be */
-#define TOUCH_RESOLUTION 20
+#define TOUCH_RESOLUTION 20 // hz
 
 
 #define LEDC_TIMER LEDC_TIMER_0
@@ -36,10 +32,6 @@ static const char *TAG = "app_main";
 
 #define TOTAL_FADE_TIME 5000 // ms
 #define FADE_TIME (TOTAL_FADE_TIME / TOUCH_RESOLUTION)
-
-
-#define min(x, y) (x < y : x ? y)
-#define max(x, y) (x < y : y ? x)
 
 
 /**
@@ -111,7 +103,7 @@ void configure_LED() {
 
 
 /**
- * Function for fading LED
+ * Function for fading the LED
  * @param current_duty The current state of duty
  * @returns new satte of duty
  */
@@ -147,7 +139,7 @@ uint16_t light_LED(uint16_t current_duty) {
 
 /**
  * Function which makes an educated guess of whether the touch sensor is being touched or not
-//  * @returns true if the touch sensor guesses the sensor is being touched, false otherwise
+ * @returns true if the guess is that the sensor is being touched, false otherwise
  */
 bool inline is_touching(uint16_t touch_value) {
     return touch_value < TOUCH_DETECTION_THRESHOLD;
@@ -155,12 +147,12 @@ bool inline is_touching(uint16_t touch_value) {
 
 
 void app_main(void) {
-    ESP_LOGI(TAG, "Configuring touch sensor at pin %u", TOUCH_SENSOR_GPIO);
+    ESP_LOGI("setup", "Configuring touch sensor at pin %u", TOUCH_SENSOR_GPIO);
     configure_touch_sensor();
 
-    ESP_LOGI(TAG, "Touch detection threshold is set to arbitrary value of %u", TOUCH_DETECTION_THRESHOLD);
+    ESP_LOGI("setup", "Touch detection threshold is set to arbitrary value of %u", TOUCH_DETECTION_THRESHOLD);
 
-    ESP_LOGI(TAG, "Configuring LED at pin %u", LEDC_GPIO);
+    ESP_LOGI("setup", "Configuring LED at pin %u", LEDC_GPIO);
     configure_LED();
  
     bool was_touching = false;
@@ -170,22 +162,22 @@ void app_main(void) {
     uint16_t touch_value;
     while (1) {
         if (duty != previous_duty) {
-            ESP_LOGI(TAG, "Current duty is %u", duty);
+            ESP_LOGI("loop", "Current duty is %u", duty);
             previous_duty = duty;
         }
         
         touch_pad_read(TOUCH_PAD_NUM0, &touch_value);
-        ESP_LOGI(TAG, "Reading arbitrary value of %u from the touch sensor", touch_value);
+        ESP_LOGI("loop", "Reading arbitrary value of %u from the touch sensor", touch_value);
         
         if (!is_touching(touch_value) && duty > 0) {
             if (was_touching) {
-                ESP_LOGI(TAG, "Fading LED since touch sensor is no longer touched");
+                ESP_LOGI("loop", "Fading LED since touch sensor is no longer touched");
                 was_touching = false;
             }
             duty = fade_LED(duty);        
         } else if (is_touching(touch_value) && duty < LEDC_MAX_DUTY) {
             if (!was_touching) {
-                ESP_LOGI(TAG, "Lighting LED up since touch is detected");
+                ESP_LOGI("loop", "Lighting LED up since touch is detected");
                 was_touching = true;
             }
             duty = light_LED(duty);
