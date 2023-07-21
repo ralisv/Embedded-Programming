@@ -1,0 +1,10 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.flashType": "UART",
+  "idf.port": "/dev/ttyACM0",
+  "idf.adapterTargetName": "esp32",
+  "files.associations": {
+    "utils.h": "c"
+  },
+  "C_Cpp.errorSquiggles": "disabled"
+}
