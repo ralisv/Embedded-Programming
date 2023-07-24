@@ -1,9 +1,0 @@
-{
-  "C_Cpp.intelliSenseEngine": "default",
-  "idf.port": "/dev/ttyACM0",
-  "idf.flashType": "UART",
-  "files.associations": {
-    "touch_sensor.h": "c"
-  },
-  "idf.adapterTargetName": "esp32"
-}
