@@ -5,8 +5,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
-#include "driver/touch_pad.h"
-#include "driver/touch_sensor.h"
 #include "driver/mcpwm.h"
 #include "esp_log.h"
 
@@ -28,6 +26,7 @@
 #define MOTOR1_POWER_GPIO GPIO_NUM_14
 /* Motor 2 power control pin */
 #define MOTOR2_POWER_GPIO GPIO_NUM_25
+
 /* MOTOR_POWER_INCREMENT is a constant that determines the step size for increasing or decreasing
  * the duty cycle for motor speed control */
 #define MOTOR_POWER_INCREMENT 5.0
@@ -36,50 +35,6 @@
 /* The MCPWM uses percentage to represent duty cycle, so the minimum is 0 */
 #define MIN_DUTY_CYCLE 0.0
 
-
-/* Touch sensor pin */
-#define TOUCH_SENSOR1_GPIO TOUCH_PAD_NUM3
-/* Touch sensor pin */
-#define TOUCH_SENSOR2_GPIO TOUCH_PAD_NUM0
-/* Arbitrary value, in your setup you migjt have to modify it */
-#define TOUCH_DETECTION_THRESHOLD 500
-/* The higher the touch resolution, the smoother the light-up and fade is going to be, in hz */
-#define TOUCH_RESOLUTION 5
-
-
-/**
- * Initializes touch sensors
- */
-void configure_touch_sensors() {
-    /* Before using a touch pad, you need to initialize the touch pad driver */
-    ESP_ERROR_CHECK(touch_pad_init());
-
-    /* Use the function touch_pad_set_fsm_mode() to select if touch pad
-     * measurement (operated by FSM) should be started automatically by a hardware timer */
-    ESP_ERROR_CHECK(touch_pad_set_fsm_mode(TOUCH_FSM_MODE_SW));
-    
-    /* Enabling the touch sensor functionality for a particular GPIO is done
-     * with touch_pad_config() */
-    ESP_ERROR_CHECK(touch_pad_config(TOUCH_SENSOR1_GPIO, 200));
-    ESP_ERROR_CHECK(touch_pad_config(TOUCH_SENSOR2_GPIO, 200));
-
-    /* Start touch sensor by software */
-    ESP_ERROR_CHECK(touch_pad_sw_start());
-
-    /* Set sampling interval to 512 ms */
-    ESP_ERROR_CHECK(touch_pad_set_measurement_interval(512));
-
-    /* Configure sensor's sensitivity by setting pin's voltage levels */
-    touch_pad_set_voltage(TOUCH_HVOLT_2V7, TOUCH_LVOLT_0V5, TOUCH_HVOLT_ATTEN_1V);
-}
-
-/**
- * Function which makes an educated guess of whether the touch sensor is being touched or not
- * @returns true if the guess is that the sensor is being touched, false otherwise
- */
-bool inline is_touching(uint16_t touch_value) {
-    return touch_value < TOUCH_DETECTION_THRESHOLD;
-}
 
 /**
  * Configures GPIO pins for motor control
@@ -138,7 +93,7 @@ esp_err_t update_motors_duty(float increment) {
     esp_err_t ret;
     /* Set new duty cycle for both motors */
     ret = mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, duty_new);
-    ret = (ret != ESP_OK) ? mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0B, duty_new) : ret;
+    ret = (ret != ESP_OK) ? ret : mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0B, duty_new);
 
     ESP_LOGI("update_motors_duty", "New duty cycle: %f", duty_new);
     return ret;
@@ -147,62 +102,28 @@ esp_err_t update_motors_duty(float increment) {
 
 
 void app_main(void) {
-    ESP_LOGI("setup", "Configuring touch sensors at touch pads %u and %u", TOUCH_SENSOR1_GPIO, TOUCH_SENSOR2_GPIO);
-    configure_touch_sensors();
-
-    ESP_LOGI("setup", "Touch detection threshold is set to arbitrary value of %u", TOUCH_DETECTION_THRESHOLD);
-
     ESP_LOGI("setup", "Configuring motor control pins");
     configure_motor_control();
-
-    ESP_ERROR_CHECK(update_motors_duty(50));
-    vTaskDelay((1000 / TOUCH_RESOLUTION) / portTICK_PERIOD_MS);
-
-    update_motors_duty(-50);
-    vTaskDelay((1000 / TOUCH_RESOLUTION) / portTICK_PERIOD_MS);
-
-    update_motors_duty(100);
-    vTaskDelay((1000 / TOUCH_RESOLUTION) / portTICK_PERIOD_MS);
-
-    update_motors_duty(-100);
     
-    bool was_touched1 = false;
-    bool was_touched2 = false;
-    uint16_t touch_value1;
-    uint16_t touch_value2;
+    bool was_running = false;
     while (1) {
-        touch_pad_read(TOUCH_SENSOR1_GPIO, &touch_value1);
-        touch_pad_read(TOUCH_SENSOR2_GPIO, &touch_value2);
-
-        /* If only one sensor is touched, turn the according motor forward */
-        if (is_touching(touch_value1) && !was_touched1) {
-            ESP_LOGI("loop", "Touch detected on sensor 1");
-            update_motors_duty(50);
-
-            was_touched1 = true;
-            gpio_set_level(MOTOR1_FORWARD_GPIO, 1);
-        } else if (!is_touching(touch_value1) && was_touched1) {
-            ESP_LOGI("loop", "Stop touch detected on sensor 1");
-            update_motors_duty(-50);
-
-            was_touched1 = false;
+        if (was_running) {
+            /* If the motor was running, we need to stop it */
+            ESP_ERROR_CHECK(update_motors_duty(-1));
             gpio_set_level(MOTOR1_FORWARD_GPIO, 0);
-        }
-
-        if (is_touching(touch_value2) && !was_touched2) {
-            ESP_LOGI("loop", "Touch detected on sensor 2");
-            
-            update_motors_duty(50);
-            was_touched2 = true;
-            gpio_set_level(MOTOR2_FORWARD_GPIO, 1);
-        } else if (!is_touching(touch_value2) && was_touched2) {
-            ESP_LOGI("loop", "Stop touch detected on sensor 2");
-            update_motors_duty(-50);
-
-            was_touched2 = false;
+            gpio_set_level(MOTOR1_BACKWARD_GPIO, 1);
             gpio_set_level(MOTOR2_FORWARD_GPIO, 0);
+            gpio_set_level(MOTOR2_BACKWARD_GPIO, 1);
+            was_running = false;
+        } else {
+            ESP_ERROR_CHECK(update_motors_duty(3));
+            gpio_set_level(MOTOR1_FORWARD_GPIO, 1);
+            gpio_set_level(MOTOR1_BACKWARD_GPIO, 0);
+            gpio_set_level(MOTOR2_FORWARD_GPIO, 1);
+            gpio_set_level(MOTOR2_BACKWARD_GPIO, 0);
+            was_running = true;
         }
 
-        vTaskDelay((1000 / TOUCH_RESOLUTION) / portTICK_PERIOD_MS);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
