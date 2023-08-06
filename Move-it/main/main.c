@@ -97,9 +97,36 @@ esp_err_t update_motors_duty(float increment) {
 
     ESP_LOGI("update_motors_duty", "New duty cycle: %f", duty_new);
     return ret;
-}   
+}
 
+/**
+ * Sets the duty o both motor power pins to a new value
+ * @param duty_new percentage which will be set as the new duty cycle of both motors
+ */
+esp_err_t inline set_motors_duty(float duty_new) {
+    return mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0A, duty_new) \
+        || mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM0B, duty_new);
+}
 
+/**
+ * Sets the spin direction of both motors to forward
+ */
+esp_err_t inline spin_forward() {
+    return gpio_set_level(MOTOR1_FORWARD_GPIO, 1) \
+        || gpio_set_level(MOTOR1_BACKWARD_GPIO, 0) \
+        || gpio_set_level(MOTOR2_FORWARD_GPIO, 1) \
+        || gpio_set_level(MOTOR2_BACKWARD_GPIO, 0);
+}
+
+/**
+ * Sets the spin direction of both motors to backward
+ */
+esp_err_t inline spin_backward() {
+    return gpio_set_level(MOTOR1_FORWARD_GPIO, 0) \
+        || gpio_set_level(MOTOR1_BACKWARD_GPIO, 1) \
+        || gpio_set_level(MOTOR2_FORWARD_GPIO, 0) \
+        || gpio_set_level(MOTOR2_BACKWARD_GPIO, 1);
+}
 
 void app_main(void) {
     ESP_LOGI("setup", "Configuring motor control pins");
