@@ -16,13 +16,22 @@
 /* Arbitrary value, in your setup you migjt have to modify it */
 #define TOUCH_DETECTION_THRESHOLD 500
 /* The higher the touch resolution, the smoother the light-up and fade is going to be */
-#define TOUCH_RESOLUTION 20 // hz
+#define TOUCH_RESOLUTION 5
 
 
 #define LEDC_TIMER LEDC_TIMER_0
 #define LEDC_MODE LEDC_LOW_SPEED_MODE
-#define LEDC_GPIO 23
-#define LEDC_CHANNEL LEDC_CHANNEL_0
+
+#define LEDC_GPIO_FORWARD 32
+#define LEDC_GPIO_BACKWARD 33
+#define LEDC_GPIO_LEFT 25
+#define LEDC_GPIO_RIGHT 26
+
+#define LEDC_CHANNEL_FORWARD LEDC_CHANNEL_0
+#define LEDC_CHANNEL_BACKWARD LEDC_CHANNEL_1
+#define LEDC_CHANNEL_LEFT LEDC_CHANNEL_2
+#define LEDC_CHANNEL_RIGHT LEDC_CHANNEL_3
+
 #define LEDC_DUTY_RESOLUTION LEDC_TIMER_13_BIT
 #define LEDC_DUTY 0
 #define LEDC_FREQUENCY 100
@@ -30,43 +39,13 @@
 
 #define LEDC_DUTY_INCREMENT (LEDC_MAX_DUTY / TOUCH_RESOLUTION)
 
-#define TOTAL_FADE_TIME 5000 // ms
-#define FADE_TIME (TOTAL_FADE_TIME / TOUCH_RESOLUTION)
-
-
-/**
- * Initializes touch sensor  
- */
-void configure_touch_sensor() {
-    /* Before using a touch pad, you need to initialize the touch pad driver */
-    ESP_ERROR_CHECK(touch_pad_init());
-
-    /* Use the function touch_pad_set_fsm_mode() to select if touch pad
-     * measurement (operated by FSM) should be started automatically by a hardware timer */
-    ESP_ERROR_CHECK(touch_pad_set_fsm_mode(TOUCH_FSM_MODE_SW));
-    
-    /* Enabling the touch sensor functionality for a particular GPIO is done
-     * with touch_pad_config() */
-    ESP_ERROR_CHECK(touch_pad_config(TOUCH_SENSOR_GPIO, 200));
-    
-    /* Start touch sensor by software */
-    ESP_ERROR_CHECK(touch_pad_sw_start());
-
-    /* Set sampling interval to 512 ms */
-    ESP_ERROR_CHECK(touch_pad_set_measurement_interval(512));
-
-    /* Configure sensor's sensitivity by setting pin's voltage levels */
-    touch_pad_set_voltage(TOUCH_HVOLT_2V7, TOUCH_LVOLT_0V5, TOUCH_HVOLT_ATTEN_1V);
-    
-    /* Start the touch pad filter to process the raw reading data and eliminate possible noise */
-    touch_pad_filter_start(10);
-}
+#define FADE_TIME (1000 / TOUCH_RESOLUTION)
 
 
 /**
  * Initializes LEDC timer and channel
  */
-void configure_LED() {
+void configure_LEDs() {
     /* Configure LEDC timer */
     ledc_timer_config_t ledc_timer = {
         /* Resolution of the pwm duty (the amount of shades LED can reach) */
@@ -82,20 +61,37 @@ void configure_LED() {
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
-    /* Configure LEDC channel */
-    const ledc_channel_config_t led_config = {
-        /* The LED is located on pin number 23 */
-        .gpio_num = LEDC_GPIO,
-        /* Configure speed mode */
+    /* Configure LEDC channels */
+    const ledc_channel_config_t led_config_base = {
         .speed_mode = LEDC_MODE,
-        /* Specify LEDC channel */
-        .channel = LEDC_CHANNEL,
-        /* Specify the timer for generating pwm signal */
         .timer_sel = LEDC_TIMER,
-        /* Configure duty cycle (LED brightness) */
         .duty = LEDC_DUTY
     };
-    ESP_ERROR_CHECK(ledc_channel_config(&led_config));
+
+    ledc_channel_config_t led_configs[4] = {
+        {
+            .channel = LEDC_CHANNEL_FORWARD,
+            .gpio_num = LEDC_GPIO_FORWARD,
+        },
+        {
+            .channel = LEDC_CHANNEL_BACKWARD,
+            .gpio_num = LEDC_GPIO_BACKWARD,
+        },
+        {
+            .channel = LEDC_CHANNEL_LEFT,
+            .gpio_num = LEDC_GPIO_LEFT,
+        },
+        {
+            .channel = LEDC_CHANNEL_RIGHT,
+            .gpio_num = LEDC_GPIO_RIGHT,
+        }
+    };
+    for (uint8_t i = 0; i < 4; i++) {
+        ledc_channel_config_t led_config = led_config_base;
+        led_config.channel = led_configs[i].channel;
+        led_config.gpio_num = led_configs[i].gpio_num;
+        ESP_ERROR_CHECK(ledc_channel_config(&led_config));
+    };
 
     /* Activate the fading functionality */
     ESP_ERROR_CHECK(ledc_fade_func_install(0));    
@@ -104,84 +100,39 @@ void configure_LED() {
 
 /**
  * Function for fading the LED
- * @param current_duty The current state of duty
+ * @param new_duty The current state of duty
+ * @param channel The channel of the LED
  * @returns new satte of duty
  */
-uint16_t fade_LED(uint16_t current_duty) {
-    const uint16_t new_duty = (LEDC_DUTY_INCREMENT > current_duty) ? 0 : current_duty - LEDC_DUTY_INCREMENT; // Check for underflow
-
+uint16_t fade_LED(uint16_t new_duty, ledc_channel_t channel) {
     /* Set the target duty cycle and the time it takes to reach that duty cycle */
-    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, new_duty, FADE_TIME));
+    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, channel, new_duty, FADE_TIME));
     
     /* Start fading */
-    ESP_ERROR_CHECK(ledc_fade_start(LEDC_MODE, LEDC_CHANNEL, LEDC_FADE_NO_WAIT));
+    ESP_ERROR_CHECK(ledc_fade_start(LEDC_MODE, channel, LEDC_FADE_NO_WAIT));
 
     return new_duty;
-}
-
-/**
- * Function for lighting the LED
- * @param current_duty The current state of duty
- * @returns new satte of duty
- */
-uint16_t light_LED(uint16_t current_duty) {
-    const uint16_t new_duty = (LEDC_DUTY_INCREMENT + current_duty > LEDC_MAX_DUTY) ? LEDC_MAX_DUTY : current_duty + LEDC_DUTY_INCREMENT; // Check for overflow
-
-    /* Set the target duty cycle and the time it takes to reach that duty cycle */
-    ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, LEDC_CHANNEL, new_duty, FADE_TIME));
-    
-    /* Start fading */
-    ESP_ERROR_CHECK(ledc_fade_start(LEDC_MODE, LEDC_CHANNEL, LEDC_FADE_NO_WAIT));
-
-    return new_duty;
-}
-
-
-/**
- * Function which makes an educated guess of whether the touch sensor is being touched or not
- * @returns true if the guess is that the sensor is being touched, false otherwise
- */
-bool inline is_touching(uint16_t touch_value) {
-    return touch_value < TOUCH_DETECTION_THRESHOLD;
 }
 
 
 void app_main(void) {
-    ESP_LOGI("setup", "Configuring touch sensor at pin %u", TOUCH_SENSOR_GPIO);
-    configure_touch_sensor();
-
-    ESP_LOGI("setup", "Touch detection threshold is set to arbitrary value of %u", TOUCH_DETECTION_THRESHOLD);
-
-    ESP_LOGI("setup", "Configuring LED at pin %u", LEDC_GPIO);
-    configure_LED();
- 
-    bool was_touching = false;
-    uint16_t duty = 0;
-    uint16_t previous_duty = -1;
-
-    uint16_t touch_value;
+    ESP_LOGI("setup", "Configuring LEDs");
+    configure_LEDs();
+    
+    bool tmp = false;
     while (1) {
-        if (duty != previous_duty) {
-            ESP_LOGI("loop", "Current duty is %u", duty);
-            previous_duty = duty;
+        if (tmp) {
+            fade_LED(LEDC_MAX_DUTY, LEDC_CHANNEL_FORWARD);
+            fade_LED(0, LEDC_CHANNEL_BACKWARD);
+            fade_LED(LEDC_MAX_DUTY, LEDC_CHANNEL_LEFT);
+            fade_LED(0, LEDC_CHANNEL_RIGHT);
+        } else {
+            fade_LED(0, LEDC_CHANNEL_FORWARD);
+            fade_LED(LEDC_MAX_DUTY, LEDC_CHANNEL_BACKWARD);
+            fade_LED(0, LEDC_CHANNEL_LEFT);
+            fade_LED(LEDC_MAX_DUTY, LEDC_CHANNEL_RIGHT);
         }
-        
-        touch_pad_read(TOUCH_PAD_NUM0, &touch_value);
-        ESP_LOGI("loop", "Reading arbitrary value of %u from the touch sensor", touch_value);
-        
-        if (!is_touching(touch_value) && duty > 0) {
-            if (was_touching) {
-                ESP_LOGI("loop", "Fading LED since touch sensor is no longer touched");
-                was_touching = false;
-            }
-            duty = fade_LED(duty);        
-        } else if (is_touching(touch_value) && duty < LEDC_MAX_DUTY) {
-            if (!was_touching) {
-                ESP_LOGI("loop", "Lighting LED up since touch is detected");
-                was_touching = true;
-            }
-            duty = light_LED(duty);
-        }
+        tmp = !tmp;
 
         /* Wait for the fade to complete */
         vTaskDelay(FADE_TIME / portTICK_PERIOD_MS);
