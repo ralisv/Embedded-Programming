@@ -100,11 +100,14 @@ void configure_LEDs() {
 
 /**
  * Function for fading the LED
- * @param new_duty The current state of duty
+ * @param new_duty_pct The current state of duty, in percentage
  * @param channel The channel of the LED
  * @returns new satte of duty
  */
-uint16_t fade_LED(uint16_t new_duty, ledc_channel_t channel) {
+uint16_t fade_LED(float new_duty_pct, ledc_channel_t channel) {
+    /* Convert percentage to duty cycle value */
+    uint16_t new_duty = (new_duty_pct / 100) * LEDC_MAX_DUTY;
+
     /* Set the target duty cycle and the time it takes to reach that duty cycle */
     ESP_ERROR_CHECK(ledc_set_fade_with_time(LEDC_MODE, channel, new_duty, FADE_TIME));
     
@@ -122,15 +125,15 @@ void app_main(void) {
     bool tmp = false;
     while (1) {
         if (tmp) {
-            fade_LED(LEDC_MAX_DUTY, LEDC_CHANNEL_FORWARD);
+            fade_LED(100, LEDC_CHANNEL_FORWARD);
             fade_LED(0, LEDC_CHANNEL_BACKWARD);
-            fade_LED(LEDC_MAX_DUTY, LEDC_CHANNEL_LEFT);
+            fade_LED(100, LEDC_CHANNEL_LEFT);
             fade_LED(0, LEDC_CHANNEL_RIGHT);
         } else {
             fade_LED(0, LEDC_CHANNEL_FORWARD);
-            fade_LED(LEDC_MAX_DUTY, LEDC_CHANNEL_BACKWARD);
+            fade_LED(100, LEDC_CHANNEL_BACKWARD);
             fade_LED(0, LEDC_CHANNEL_LEFT);
-            fade_LED(LEDC_MAX_DUTY, LEDC_CHANNEL_RIGHT);
+            fade_LED(100, LEDC_CHANNEL_RIGHT);
         }
         tmp = !tmp;
 
